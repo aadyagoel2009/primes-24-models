@@ -1,4 +1,4 @@
-#change the password on line 112, change the dataset path on 115, and have graph data science library installed in neo4j
+#change the password on line 112, and have graph data science library installed in neo4j
 from neo4j import GraphDatabase
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import jaccard_score
@@ -100,11 +100,15 @@ def graph_of_docs(neo4j_handler, dataset):
     return communities
 
 # Load the dataset
-def load_dataset(filepath):
-    # Load the dataset from CSV
-    df = pd.read_csv(filepath)
-    documents = df['text'].values
-    labels = df['label'].values
+def load_dataset():
+    from sklearn.datasets import fetch_20newsgroups
+
+    # Fetch the dataset
+    newsgroups_data = fetch_20newsgroups(subset='all', remove=('headers', 'footers', 'quotes'))
+
+    # Create a dictionary with labels and documents
+    documents = newsgroups_data.data
+    labels = newsgroups_data.target
     return dict(zip(labels, documents))
 
 # Main Execution
@@ -112,7 +116,7 @@ def main():
     neo4j_handler = Neo4jHandler("bolt://localhost:7687", "neo4j", "password")
     
     # Load dataset
-    dataset = load_dataset("path_to_your_dataset/20_newsgroups.csv")  # Path to the dataset
+    dataset = load_dataset() 
 
     # Create Graph of Docs and communities
     communities = graph_of_docs(neo4j_handler, dataset)
