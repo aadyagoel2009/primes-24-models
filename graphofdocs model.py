@@ -1,3 +1,4 @@
+#with neo4j
 #change the password on line 112, and have graph data science library installed in neo4j
 from neo4j import GraphDatabase
 from sklearn.feature_extraction.text import CountVectorizer
