@@ -1,4 +1,5 @@
 #without neo4j
+from collections import Counter
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
@@ -8,30 +9,28 @@ from sklearn.metrics import accuracy_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.cluster import KMeans
-#import nltk
-#from nltk.corpus import stopwords
 import re
 
-#nltk.download('stopwords')
-# Set of English stopwords
-#stop_words = set(stopwords.words('english'))
+# Stopwords set
 
-stop_words = set([
-    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", 
-    "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", 
-    "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", 
-    "theirs", "themselves", "what", "which", "who", "whom", "this", "that", 
-    "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", 
-    "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
-    "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", 
-    "at", "by", "for", "with", "about", "against", "between", "into", "through", 
-    "during", "before", "after", "above", "below", "to", "from", "up", "down", 
-    "in", "out", "on", "off", "over", "under", "again", "further", "then", 
-    "once", "here", "there", "when", "where", "why", "how", "all", "any", 
-    "both", "each", "few", "more", "most", "other", "some", "such", "no", 
-    "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", 
-    "t", "can", "will", "just", "don", "should", "now"
-])
+#stop_words = set([
+   # "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", 
+   # "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", 
+   # "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", 
+   # "theirs", "themselves", "what", "which", "who", "whom", "this", "that", 
+   # "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", 
+   # "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
+   # "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", 
+   # "at", "by", "for", "with", "about", "against", "between", "into", "through", 
+   # "during", "before", "after", "above", "below", "to", "from", "up", "down", 
+   # "in", "out", "on", "off", "over", "under", "again", "further", "then", 
+   # "once", "here", "there", "when", "where", "why", "how", "all", "any", 
+   # "both", "each", "few", "more", "most", "other", "some", "such", "no", 
+   # "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", 
+   # "t", "can", "will", "just", "don", "should", "now"
+#])
+stop_words=set(["and", "or", "can", "just"])
+
 
 # Preprocessing and Graph Construction
 def clean_data(document):
@@ -128,10 +127,19 @@ def load_20newsgroups_dataset():
     labels = newsgroups_data.target
     return dict(zip(labels, documents))
 
+# Filter out classes with fewer than 2 samples
+def filter_classes_with_few_samples(dataset):
+    label_counts = Counter(dataset.keys())
+    filtered_dataset = {label: doc for label, doc in dataset.items() if label_counts[label] > 1}
+    return filtered_dataset
+
 # Main Execution
 def main():
     # Load the 20 Newsgroups dataset
     dataset = load_20newsgroups_dataset()
+
+    # Filter out classes with fewer than 2 documents
+    dataset = filter_classes_with_few_samples(dataset)
 
     # Create Graph of Docs and communities
     communities, similarity_matrix = graph_of_docs(dataset)
@@ -139,7 +147,9 @@ def main():
     # Train a classifier
     le = LabelEncoder()
     y = le.fit_transform(list(dataset.keys()))
-    X_train, X_test, y_train, y_test = train_test_split(similarity_matrix, y, test_size=0.3, random_state=42)
+
+    # Split dataset into training and testing (based on documents, not labels)
+    X_train, X_test, y_train, y_test = train_test_split(similarity_matrix, y, test_size=0.3, random_state=42, stratify=y)
 
     # Train KNN Classifier
     knn = KNeighborsClassifier(n_neighbors=3)
