@@ -13,23 +13,22 @@ import re
 
 # Stopwords set
 
-#stop_words = set([
-   # "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", 
-   # "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", 
-   # "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", 
-   # "theirs", "themselves", "what", "which", "who", "whom", "this", "that", 
-   # "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", 
-   # "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
-   # "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", 
-   # "at", "by", "for", "with", "about", "against", "between", "into", "through", 
-   # "during", "before", "after", "above", "below", "to", "from", "up", "down", 
-   # "in", "out", "on", "off", "over", "under", "again", "further", "then", 
-   # "once", "here", "there", "when", "where", "why", "how", "all", "any", 
-   # "both", "each", "few", "more", "most", "other", "some", "such", "no", 
-   # "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", 
-   # "t", "can", "will", "just", "don", "should", "now"
-#])
-stop_words=set(["and", "or", "can", "just"])
+stop_words = set([
+    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", 
+    "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", 
+    "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", 
+    "theirs", "themselves", "what", "which", "who", "whom", "this", "that", 
+    "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", 
+    "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
+    "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", 
+    "at", "by", "for", "with", "about", "against", "between", "into", "through", 
+    "during", "before", "after", "above", "below", "to", "from", "up", "down", 
+    "in", "out", "on", "off", "over", "under", "again", "further", "then", 
+    "once", "here", "there", "when", "where", "why", "how", "all", "any", 
+    "both", "each", "few", "more", "most", "other", "some", "such", "no", 
+    "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", 
+    "t", "can", "will", "just", "don", "should", "now"
+])
 
 
 # Preprocessing and Graph Construction
@@ -37,6 +36,8 @@ def clean_data(document):
     # Remove non-alphanumeric characters and lowercasing
     document = re.sub(r'\W+', ' ', document.lower())
     # Split document into words, filter out stopwords
+    #print(word for word in document.split() if word not in stop_words)
+    #print("hm")
     return ' '.join([word for word in document.split() if word not in stop_words])
 
 def create_word_graph(terms):
@@ -119,45 +120,51 @@ def graph_of_docs(dataset):
 def load_20newsgroups_dataset():
     from sklearn.datasets import fetch_20newsgroups
 
-    # Fetch the dataset
-    newsgroups_data = fetch_20newsgroups(subset='all', remove=('headers', 'footers', 'quotes'))
+    # Fetch the training and test subsets
+    newsgroups_train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
+    newsgroups_test = fetch_20newsgroups(subset='test', remove=('headers', 'footers', 'quotes'))
 
-    # Create a dictionary with labels and documents
-    documents = newsgroups_data.data
-    labels = newsgroups_data.target
-    return dict(zip(labels, documents))
+    # Combine into dictionaries: label -> document
+    train_data = dict(zip(newsgroups_train.target, newsgroups_train.data))
+    test_data = dict(zip(newsgroups_test.target, newsgroups_test.data))
 
-# Filter out classes with fewer than 2 samples
-def filter_classes_with_few_samples(dataset):
-    label_counts = Counter(dataset.keys())
-    filtered_dataset = {label: doc for label, doc in dataset.items() if label_counts[label] > 1}
-    return filtered_dataset
+    return train_data, test_data
 
 # Main Execution
 def main():
-    # Load the 20 Newsgroups dataset
-    dataset = load_20newsgroups_dataset()
+    # Load the 20 Newsgroups dataset (both train and test sets)
+    train_dataset, test_dataset = load_20newsgroups_dataset()
 
-    # Filter out classes with fewer than 2 documents
-    dataset = filter_classes_with_few_samples(dataset)
-
-    # Create Graph of Docs and communities
-    communities, similarity_matrix = graph_of_docs(dataset)
-
-    # Train a classifier
+    # Encode labels for training and testing datasets
+    train_labels = list(train_dataset.keys())
+    test_labels = list(test_dataset.keys())
+    
     le = LabelEncoder()
-    y = le.fit_transform(list(dataset.keys()))
+    y_train_labels = le.fit_transform(train_labels)
+    y_test_labels = le.transform(test_labels)
 
-    # Split dataset into training and testing (based on documents, not labels)
-    X_train, X_test, y_train, y_test = train_test_split(similarity_matrix, y, test_size=0.3, random_state=42, stratify=y)
+    # Train a classifier using the similarity matrix of the training set
+    communities, similarity_matrix_train = graph_of_docs(train_dataset)
 
-    # Train KNN Classifier
+    # Prepare the test document vectors (this will be needed for testing later)
+    vectorizer = CountVectorizer()
+    doc_vectors_test = vectorizer.fit_transform(test_dataset.values()).toarray()
+
+    # Calculate Jaccard similarity for test documents against the training similarity matrix
+    similarities_test = calculate_jaccard_similarity(doc_vectors_test)
+    similarity_matrix_test = create_document_similarity_matrix(similarities_test, len(doc_vectors_test))
+
+    # Train KNN Classifier using training data similarity matrix
     knn = KNeighborsClassifier(n_neighbors=3)
-    knn.fit(X_train, y_train)
-    y_pred = knn.predict(X_test)
+    knn.fit(similarity_matrix_train, y_train_labels)
 
-    # Evaluate
-    accuracy = accuracy_score(y_test, y_pred)
+    # Predict on the test set
+    y_pred = knn.predict(similarity_matrix_test)
+
+    # Evaluate accuracy
+    accuracy = accuracy_score(y_test_labels, y_pred)
+    print(y_test_labels)
+    print(y_pred)
     print(f"Accuracy: {accuracy * 100:.2f}%")
 
 # Execute the code
